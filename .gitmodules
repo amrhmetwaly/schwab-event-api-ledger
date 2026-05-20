@@ -1,0 +1,4 @@
+[submodule "project-specifications"]
+	path = project-specifications
+	url = https://github.com/amrhmetwaly/Event-Ledger-API.git
+	branch = 001-event-ledger-api
