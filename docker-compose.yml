@@ -1,0 +1,13 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      EVENT_LEDGER_DATABASE_URL: sqlite:////data/event_ledger.db
+    volumes:
+      - event_ledger_data:/data
+    restart: unless-stopped
+
+volumes:
+  event_ledger_data:
