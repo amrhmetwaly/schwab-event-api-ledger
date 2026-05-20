@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 import pytest
 
@@ -10,13 +10,37 @@ def test_parse_positive_amount():
 
 
 def test_parse_rejects_non_positive():
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="greater than 0"):
         parse_positive_amount(0)
 
 
+def test_parse_rejects_invalid_decimal():
+    with pytest.raises(ValueError, match="positive number"):
+        parse_positive_amount("not-a-number")
+
+
+def test_parse_rejects_invalid_operation():
+    with pytest.raises(ValueError, match="positive number"):
+
+        class BadStr:
+            def __str__(self) -> str:
+                raise InvalidOperation
+
+        parse_positive_amount(BadStr())
+
+
 def test_format_balance_strips_trailing_zeros():
-    assert format_balance(Decimal("75.00")) == "75"
-    assert format_balance(Decimal("-50")) == "-50"
+    assert format_balance(Decimal("75.50")) == "75.5"
+    assert format_balance(Decimal("-50.25")) == "-50.25"
+
+
+def test_format_balance_strips_fractional_zeros_to_integer():
+    assert format_balance(Decimal("10.00")) == "10"
+
+
+def test_format_balance_zero_fractional_normalizes_to_zero():
+    assert format_balance(Decimal("0.001")) == "0.001"
+    assert format_balance(Decimal("0.100")) == "0.1"
 
 
 def test_canonical_hash_stable_for_equivalent_payloads():

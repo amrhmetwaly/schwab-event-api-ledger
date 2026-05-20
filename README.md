@@ -293,6 +293,24 @@ If `pytest` sits with no output for a long time on macOS Desktop, use `./scripts
 (sets `PYTHONPATH` and `--assert=plain`). With **Conda**, run `conda deactivate` first so
 only `.venv` is on your `PATH`.
 
+### Test coverage
+
+Generate a coverage report for all tests (line + branch coverage on `event_ledger_api`):
+
+```bash
+./scripts/coverage.sh
+```
+
+This writes:
+
+| Artifact | Purpose |
+|----------|---------|
+| [coverage/REPORT.md](coverage/REPORT.md) | Committed summary (percentages, per-module table, suite layout) |
+| `coverage/coverage.json` | Machine-readable coverage data |
+| `coverage/html/index.html` | Local HTML report (gitignored; open in a browser) |
+
+Re-run `./scripts/coverage.sh` after changing application code or tests to refresh the report.
+
 ## Data Safety
 
 - Uses a local SQLite file only; no external database.

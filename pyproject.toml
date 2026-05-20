@@ -19,6 +19,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.3.0",
+    "pytest-cov>=6.0.0",
     "httpx>=0.28.0",
     "pyyaml>=6.0.2",
 ]
@@ -33,3 +34,17 @@ only-packages = true
 testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-q --assert=plain"
+
+[tool.coverage.run]
+source = ["event_ledger_api"]
+branch = true
+omit = ["*/tests/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+fail_under = 100
+precision = 1
+
+[tool.coverage.html]
+directory = "coverage/html"

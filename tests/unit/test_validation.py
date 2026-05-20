@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 import pytest
 from pydantic import ValidationError
 
@@ -20,6 +22,17 @@ def _base(**overrides):
 def test_valid_submission():
     model = EventSubmission.model_validate(_base())
     assert model.eventId == "evt-1"
+
+
+def test_accepts_datetime_instance():
+    ts = datetime(2026, 5, 15, 14, 2, 11, tzinfo=UTC)
+    model = EventSubmission.model_validate(_base(eventTimestamp=ts))
+    assert model.eventTimestamp == ts
+
+
+def test_rejects_blank_timestamp_string():
+    with pytest.raises(ValidationError):
+        EventSubmission.model_validate(_base(eventTimestamp="   "))
 
 
 @pytest.mark.parametrize(

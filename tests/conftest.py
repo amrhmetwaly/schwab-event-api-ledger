@@ -11,8 +11,12 @@ TEST_DATABASE_URL = "sqlite:///:memory:"
 
 
 def _reset_database_state() -> None:
-    if database_module._engine is not None:
-        Base.metadata.drop_all(bind=database_module._engine)
+    engine = database_module._engine
+    if engine is not None:
+        if hasattr(engine, "_run_ddl_visitor"):
+            Base.metadata.drop_all(bind=engine)
+        if hasattr(engine, "dispose"):
+            engine.dispose()
     database_module._engine = None
     database_module._session_factory = None
     get_settings.cache_clear()
