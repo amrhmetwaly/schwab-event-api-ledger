@@ -1,0 +1,312 @@
+openapi: 3.1.0
+info:
+  title: Event Ledger API
+  version: 0.1.0
+  description: >
+    Local API for accepting financial transaction events, handling duplicate
+    delivery idempotently, listing account events chronologically, and deriving
+    account balances from accepted events. Duplicate submissions with the same
+    eventId and identical payload return HTTP 200 without mutating ledger state.
+    Events may arrive out of order; listings are sorted by eventTimestamp then
+    eventId. Concurrent POSTs for the same eventId are resolved via database
+    uniqueness and idempotent recovery.
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is ready.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                properties:
+                  status:
+                    type: string
+                    examples:
+                      - ok
+  /events:
+    post:
+      summary: Submit a transaction event
+      operationId: submitEvent
+      tags:
+        - Events
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventSubmission'
+            examples:
+              credit:
+                value:
+                  eventId: evt-001
+                  accountId: acct-123
+                  type: CREDIT
+                  amount: 150.00
+                  currency: USD
+                  eventTimestamp: '2026-05-15T14:02:11Z'
+                  metadata:
+                    source: mainframe-batch
+                    batchId: B-9042
+      responses:
+        '201':
+          description: New event accepted and stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '200':
+          description: Exact duplicate accepted idempotently; original event returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '409':
+          description: Event ID already exists with different content.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Event payload failed validation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      summary: List accepted events for an account
+      operationId: listEventsByAccount
+      tags:
+        - Events
+      parameters:
+        - name: account
+          in: query
+          required: true
+          description: Account identifier whose accepted events should be listed.
+          schema:
+            type: string
+            minLength: 1
+        - name: limit
+          in: query
+          required: false
+          description: Maximum events per page. Omit to return the full history.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1000
+        - name: offset
+          in: query
+          required: false
+          description: Number of events to skip before returning results.
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Accepted events for the account ordered by event timestamp.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventListResponse'
+        '422':
+          description: Missing or invalid query parameters.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /events/{id}:
+    get:
+      summary: Retrieve one accepted event by ID
+      operationId: getEventById
+      tags:
+        - Events
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Event identifier.
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        '200':
+          description: Stored event found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventResponse'
+        '404':
+          description: No stored event exists with this ID.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /accounts/{accountId}/balance:
+    get:
+      summary: Get the current computed account balance
+      operationId: getAccountBalance
+      tags:
+        - Accounts
+      parameters:
+        - name: accountId
+          in: path
+          required: true
+          description: Account identifier.
+          schema:
+            type: string
+            minLength: 1
+      responses:
+        '200':
+          description: Current balance derived from accepted unique events.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceResponse'
+components:
+  schemas:
+    EventSubmission:
+      type: object
+      required:
+        - eventId
+        - accountId
+        - type
+        - amount
+        - currency
+        - eventTimestamp
+      additionalProperties: false
+      properties:
+        eventId:
+          type: string
+          minLength: 1
+        accountId:
+          type: string
+          minLength: 1
+        type:
+          type: string
+          enum:
+            - CREDIT
+            - DEBIT
+        amount:
+          type: number
+          exclusiveMinimum: 0
+        currency:
+          type: string
+          minLength: 1
+          examples:
+            - USD
+        eventTimestamp:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties: true
+    EventResponse:
+      type: object
+      required:
+        - event
+      properties:
+        event:
+          $ref: '#/components/schemas/Event'
+    PaginationMeta:
+      type: object
+      required:
+        - total
+        - offset
+        - hasMore
+      properties:
+        total:
+          type: integer
+          minimum: 0
+          description: Total accepted events for the account.
+        limit:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: Page size when paginating; null when all events are returned.
+        offset:
+          type: integer
+          minimum: 0
+          description: Events skipped from the start of the ordered list.
+        hasMore:
+          type: boolean
+          description: True when additional pages exist after this response.
+    EventListResponse:
+      type: object
+      required:
+        - accountId
+        - events
+        - pagination
+      properties:
+        accountId:
+          type: string
+        events:
+          type: array
+          description: Events ordered by eventTimestamp ascending, then eventId ascending.
+          items:
+            $ref: '#/components/schemas/Event'
+        pagination:
+          $ref: '#/components/schemas/PaginationMeta'
+    Event:
+      allOf:
+        - $ref: '#/components/schemas/EventSubmission'
+    BalanceResponse:
+      type: object
+      required:
+        - accountId
+        - balances
+        - eventCount
+      properties:
+        accountId:
+          type: string
+        balances:
+          type: array
+          description: One balance per currency. Empty when the account has no accepted events.
+          items:
+            $ref: '#/components/schemas/CurrencyBalance'
+        eventCount:
+          type: integer
+          minimum: 0
+    CurrencyBalance:
+      type: object
+      required:
+        - currency
+        - balance
+      properties:
+        currency:
+          type: string
+        balance:
+          type: string
+          description: Exact decimal balance represented as a string.
+          pattern: '^-?[0-9]+(\.[0-9]+)?$'
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              examples:
+                - VALIDATION_ERROR
+                - EVENT_ID_CONFLICT
+                - EVENT_NOT_FOUND
+            message:
+              type: string
+            details:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
